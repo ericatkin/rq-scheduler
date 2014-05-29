@@ -59,7 +59,7 @@ class Scheduler(object):
             """
             Register scheduler's death and exit.
             """
-            self.log.debug('Shutting down RQ scheduler...')
+            self.log.info('Shutting down RQ scheduler...')
             self.register_death()
             raise SystemExit()
 
@@ -263,7 +263,7 @@ class Scheduler(object):
         Move a scheduled job to a queue. In addition, it also does puts the job
         back into the scheduler if needed.
         """
-        self.log.debug('Pushing {0} to {1}'.format(job.id, job.origin))
+        self.log.info('Pushing {0} to {1}'.format(job.id, job.origin))
 
         interval = job.meta.get('interval', None)
         repeat = job.meta.get('repeat', None)
@@ -299,17 +299,21 @@ class Scheduler(object):
         self.connection.expire(self.scheduler_key, self._interval + 10)
         return jobs
 
-    def run(self):
+    def run(self, check_workers=False):
         """
         Periodically check whether there's any job that should be put in the queue (score
         lower than current time).
         """
-        self.log.debug('Running RQ scheduler...')
+        self.log.info('Running RQ scheduler...')
         self.register_birth()
         self._install_signal_handlers()
         try:
             while True:
-                self.enqueue_jobs()
+                if not check_workers or self.connection.scard('rq:workers'):
+                    self.enqueue_jobs()
+                else:
+                    self.log.info('No workers...nothing enqueued!')
+                self.log.info('Sleeping {} seconds...'.format(self._interval))
                 time.sleep(self._interval)
         finally:
             self.register_death()
